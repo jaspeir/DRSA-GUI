@@ -12,5 +12,7 @@ library(ggplot2)
 library(plotly)
 library(DT)
 library(rhandsontable)
+library(tools)
+library(readxl)
 
 library(DRSA)
