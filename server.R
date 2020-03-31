@@ -1,14 +1,88 @@
+`%then%` <- shiny:::`%OR%`
+
 server <- function(input, output, session) {
   
-  decisionTable = reactive({
-    data('warehouseIT', package = 'DRSA')
-    warehouseIT$decisionTable
+  data <- reactive({
+    validate(
+      need(input$decisionTableFile != "", "Please select an input file") %then%
+        need(file_ext(input$decisionTableFile$datapath) %in% 
+               c(csv = "csv", excel = "xls", excel_xml = "xlsx", excel_xmlm = "xlsm", excel_xmlb = "xlsb", rds = "rds", rda = "rda"),
+             "Unrecognized file type")
+    )
+    
+    data = switch(file_ext(input$decisionTableFile$datapath),
+                  "csv" = fread(input$decisionTableFile$datapath),
+                  "xls" = read_excel(input$decisionTableFile$datapath),
+                  "xlsx" = read_excel(input$decisionTableFile$datapath),
+                  "xlsm" = read_excel(input$decisionTableFile$datapath),
+                  "xlsb" = read_excel(input$decisionTableFile$datapath),
+                  "rds" = readRDS(file = input$decisionTableFile$datapath),
+                  "rda" = readRDS(file = input$decisionTableFile$datapath)
+    )
+    
+    return(data)
   })
+  
+  decisionTable = reactive({
+
+    data = data()
+    req(data)
+    
+    if ("InformationTable" %in% class(data)) {
+      data$decisionTable
+    } else {
+      data
+    }
+  })
+  
+  # values <- reactiveValues()
+  # observeEvent(eventExpr = input$decisionTableFile, handlerExpr = {
+  #   
+  #   data = data()
+  #   req(data)
+  #   
+  #   if ("InformationTable" %in% class(data)) {
+  #     metaData = data$metaData
+  #   } else {
+  #     decisionTable = data
+  #     attributeCount = ncol(decisionTable)
+  #     
+  #     # Create default meta-data:
+  #     metaData = data.frame(
+  #       name = names(decisionTable),
+  #       type = c('object', rep('dominance', attributeCount - 2), 'decision'),
+  #       alpha = rep(NA_real_, attributeCount),
+  #       beta = rep(NA_real_, attributeCount)
+  #     )
+  #   }
+  #   
+  #   values$metaData = metaData
+  # })
   
   metaData = reactive({
     
+    #data = data()
+    
     if (is.null(input$metaDataHOT)) {
-      currentMetaData = warehouseIT$metaData
+      data = data()
+      req(data)
+      
+      if ("InformationTable" %in% class(data)) {
+        metaData = data$metaData
+      } else {
+        decisionTable = data
+        attributeCount = ncol(decisionTable)
+        
+        # Create default meta-data:
+        metaData = data.frame(
+          name = names(decisionTable),
+          type = c('object', rep('dominance', attributeCount - 2), 'decision'),
+          alpha = rep(NA_real_, attributeCount),
+          beta = rep(NA_real_, attributeCount)
+        )
+      }
+      
+      currentMetaData = metaData
     } else {
       currentMetaData = hot_to_r(input$metaDataHOT)
     }
@@ -35,11 +109,23 @@ server <- function(input, output, session) {
     IT
   })
   
+  output$dowloadITBTN <- downloadHandler(
+    filename = function() {
+      paste('IT', ".rds", sep = "")
+    },
+    content = function(file) {
+      saveRDS(IT(), file)
+    }
+  )
+  
   P = reactive({
+    decisionTable = decisionTable()
+    req(decisionTable)
+    
     IT = IT()
     req(IT)
     
-    P = names(IT$decisionTable)
+    P = names(decisionTable)
     P = IT$partitionAttributes(P)
     P = c(P$ind, P$sim, P$dom)
     P
