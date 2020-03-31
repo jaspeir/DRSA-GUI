@@ -50,7 +50,9 @@ body = dashboardBody(
     ),
     
     tabItem(tabName = "exportTab", 
-            downloadButton("dowloadITBTN", label = "Download information table")
+            downloadButton("dowloadITBTN", label = "Download information table"),
+            downloadButton("dowloadDomlemBTN", label = "Download DOMLEM object"),
+            downloadButton("dowloadDomlemXLSXBTN", label = "Download decision rules as Excel file")
     )
   )
 )

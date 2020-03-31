@@ -81,6 +81,7 @@ server <- function(input, output, session) {
           beta = rep(NA_real_, attributeCount)
         )
       }
+      metaData$P = metaData$type != 'object' & metaData$type != 'decision'
       
       currentMetaData = metaData
     } else {
@@ -91,12 +92,10 @@ server <- function(input, output, session) {
   })
   
   IT = reactive({
-    #req(input$appartment)
-    #req(input$stayRange)
     
     IT = tryCatch(
       expr = {
-        IT = InformationTable$new(decisionTable(), metaData())
+        IT = InformationTable$new(decisionTable(), metaData() %>% select(-P))
         output$metaDataErrors = renderText("")
         IT
       }, 
@@ -119,15 +118,12 @@ server <- function(input, output, session) {
   )
   
   P = reactive({
-    decisionTable = decisionTable()
-    req(decisionTable)
     
-    IT = IT()
-    req(IT)
-    
-    P = names(decisionTable)
-    P = IT$partitionAttributes(P)
-    P = c(P$ind, P$sim, P$dom)
+    metaData = metaData()
+    req(metaData)  
+  
+    P = metaData %>% filter(P) %>% select(name)
+    print(paste0("[+] Logging P: ", P))
     P
   })
   
@@ -237,8 +233,7 @@ server <- function(input, output, session) {
     ), selection = 'none')
   })
   
-  output$decisionRulesDT = renderDT({
-    
+  domlem = reactive({
     IT = IT()
     P = P()
     req(IT)
@@ -246,6 +241,14 @@ server <- function(input, output, session) {
     
     domlem = DOMLEM$new(it = IT, P = P)
     domlem$main()
+    domlem
+  })
+  
+  output$decisionRulesDT = renderDT({
+    
+    domlem = domlem()
+    req(domlem)
+    
     rules = c(domlem$rules$STAT1, domlem$rules$STAT2, domlem$rules$STAT3)
     
     df = map_dfr(rules, function(d) d$toList(IT))
@@ -255,4 +258,29 @@ server <- function(input, output, session) {
       pageLength = 10
     ), selection = 'none')
   })
+  
+  output$dowloadDomlemBTN <- downloadHandler(
+    filename = function() {
+      paste('DOMLEM', ".rds", sep = "")
+    },
+    content = function(file) {
+      saveRDS(domlem(), file)
+    }
+  )
+  
+  output$dowloadDomlemXLSXBTN <- downloadHandler(
+    filename = function() {
+      paste('DecisionRules', ".xlsx", sep = "")
+    },
+    content = function(file) {
+      domlem = domlem()
+      req(domlem)
+      
+      rules = c(domlem$rules$STAT1, domlem$rules$STAT2, domlem$rules$STAT3)
+      
+      df = map_dfr(rules, function(d) d$toList(IT))
+      
+      writexl::write_xlsx(df, file)
+    }
+  )
 }

@@ -14,5 +14,6 @@ library(DT)
 library(rhandsontable)
 library(tools)
 library(readxl)
+library(writexl)
 
 library(DRSA)
