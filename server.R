@@ -29,7 +29,7 @@ server <- function(input, output, session) {
     }
     
     metaData = it$metaData
-    metaData$P = metaData$type != 'object' & metaData$type != 'decision'
+    metaData$P = !metaData$type %in% c('object', 'decision', 'misc')
     rv$metaData = metaData
     
     return(it)
@@ -202,6 +202,7 @@ server <- function(input, output, session) {
   
   output$decisionRulesDT = renderDT({
     
+    IT = IT()
     domlem = domlem()
     req(domlem)
     
@@ -229,6 +230,8 @@ server <- function(input, output, session) {
       paste('DecisionRules', ".xlsx", sep = "")
     },
     content = function(file) {
+      IT = IT()
+      req(IT)
       domlem = domlem()
       req(domlem)
       
