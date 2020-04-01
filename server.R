@@ -2,6 +2,8 @@
 
 server <- function(input, output, session) {
   
+  rv = reactiveValues(metaData = NA)
+  
   data <- reactive({
     validate(
       need(input$decisionTableFile != "", "Please select an input file") %then%
@@ -20,7 +22,17 @@ server <- function(input, output, session) {
                   "rda" = readRDS(file = input$decisionTableFile$datapath)
     )
     
-    return(data)
+    it = if ("InformationTable" %in% class(data)) {
+      data
+    } else {
+      InformationTable$new(decisionTable = data)
+    }
+    
+    metaData = it$metaData
+    metaData$P = metaData$type != 'object' & metaData$type != 'decision'
+    rv$metaData = metaData
+    
+    return(it)
   })
   
   decisionTable = reactive({
@@ -28,79 +40,33 @@ server <- function(input, output, session) {
     data = data()
     req(data)
     
-    if ("InformationTable" %in% class(data)) {
-      data$decisionTable
-    } else {
-      data
-    }
+    data$decisionTable
   })
-  
-  # values <- reactiveValues()
-  # observeEvent(eventExpr = input$decisionTableFile, handlerExpr = {
-  #   
-  #   data = data()
-  #   req(data)
-  #   
-  #   if ("InformationTable" %in% class(data)) {
-  #     metaData = data$metaData
-  #   } else {
-  #     decisionTable = data
-  #     attributeCount = ncol(decisionTable)
-  #     
-  #     # Create default meta-data:
-  #     metaData = data.frame(
-  #       name = names(decisionTable),
-  #       type = c('object', rep('dominance', attributeCount - 2), 'decision'),
-  #       alpha = rep(NA_real_, attributeCount),
-  #       beta = rep(NA_real_, attributeCount)
-  #     )
-  #   }
-  #   
-  #   values$metaData = metaData
-  # })
   
   metaData = reactive({
     
-    #data = data()
-    
-    if (is.null(input$metaDataHOT)) {
-      data = data()
-      req(data)
-      
-      if ("InformationTable" %in% class(data)) {
-        metaData = data$metaData
-      } else {
-        decisionTable = data
-        attributeCount = ncol(decisionTable)
-        
-        # Create default meta-data:
-        metaData = data.frame(
-          name = names(decisionTable),
-          type = c('object', rep('dominance', attributeCount - 2), 'decision'),
-          alpha = rep(NA_real_, attributeCount),
-          beta = rep(NA_real_, attributeCount)
-        )
-      }
-      metaData$P = metaData$type != 'object' & metaData$type != 'decision'
-      
-      currentMetaData = metaData
-    } else {
-      currentMetaData = hot_to_r(input$metaDataHOT)
-    }
-    
-    currentMetaData
+    rv$metaData
+  })
+   
+  observeEvent(eventExpr = input$metaDataHOT, {
+    rv$metaData = hot_to_r(input$metaDataHOT)
   })
   
   IT = reactive({
     
+    decisionTable = decisionTable()
+    metaData = metaData()
+    req(decisionTable)
+    req(metaData)
+    
     IT = tryCatch(
       expr = {
-        IT = InformationTable$new(decisionTable(), metaData() %>% select(-P))
+        IT = InformationTable$new(decisionTable, metaData %>% select(-P))
         output$metaDataErrors = renderText("")
         IT
       }, 
       error = function(cond) {
-        output$metaDataErrors = renderText({ paste0("ERROR: cannot create InformationTable instance. \n\n", cond) })
+        output$metaDataErrors = renderText({paste0("ERROR: cannot create InformationTable instance. \n\n", cond) })
         NULL
       }
     )
@@ -108,22 +74,12 @@ server <- function(input, output, session) {
     IT
   })
   
-  output$dowloadITBTN <- downloadHandler(
-    filename = function() {
-      paste('IT', ".rds", sep = "")
-    },
-    content = function(file) {
-      saveRDS(IT(), file)
-    }
-  )
-  
   P = reactive({
     
     metaData = metaData()
     req(metaData)  
   
-    P = metaData %>% filter(P) %>% select(name)
-    print(paste0("[+] Logging P: ", P))
+    P = metaData$name[metaData$P]
     P
   })
   
@@ -281,6 +237,15 @@ server <- function(input, output, session) {
       df = map_dfr(rules, function(d) d$toList(IT))
       
       writexl::write_xlsx(df, file)
+    }
+  )
+  
+  output$dowloadITBTN <- downloadHandler(
+    filename = function() {
+      paste('IT', ".rds", sep = "")
+    },
+    content = function(file) {
+      saveRDS(IT(), file)
     }
   )
 }
